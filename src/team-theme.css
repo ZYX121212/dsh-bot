@@ -1,0 +1,72 @@
+.dt-app { accent-color:var(--dt-accent); }
+.dt-app ::selection { color:var(--dt-text);background:var(--dt-selection); }
+.dt-app input::placeholder,.dt-app textarea::placeholder { color:var(--dt-muted);opacity:1; }
+.dt-app .dt-icon-button { color:var(--dt-icon); }
+.dt-app .dt-conversation-title strong>svg { color:var(--dt-icon);opacity:1; }
+.dt-app .dt-task-status>svg,.dt-app .dt-activity-icon>svg { color:inherit; }
+.dt-app .dt-roster-search,.dt-app .dt-compose,.dt-app .dt-input { background:var(--dt-input);border-color:var(--dt-control-line); }
+.dt-app .dt-chat-header { border-bottom-color:var(--dt-line); }
+.dt-app .dt-roster-search { box-shadow:none; }
+.dt-app .dt-message-search { background:var(--dt-card);border-color:var(--dt-line); }
+.dt-app .dt-bot-row.dt-bot-selected,.dt-app .dt-nav-selected { background:var(--dt-selected)!important;color:var(--dt-selected-text)!important;border-color:transparent;box-shadow:inset 2px 0 0 var(--dt-accent); }
+.dt-app .dt-bot-row.dt-bot-selected strong { color:var(--dt-selected-text); }
+.dt-app .dt-nav-home:hover:not(.dt-nav-selected),.dt-app .dt-bot-row:hover:not(.dt-bot-selected) { background:var(--dt-hover)!important;color:var(--dt-text)!important; }
+.dt-app .dt-tabs { background:var(--dt-well); }
+.dt-app .dt-tabs button { color:var(--dt-muted); }
+.dt-app .dt-tabs button[aria-selected=true] { background:var(--dt-card);color:var(--dt-accent);border-bottom-color:var(--dt-accent)!important;box-shadow:none; }
+.dt-app .dt-button { background:var(--dt-card)!important;color:var(--dt-text);border-color:var(--dt-control-line)!important;box-shadow:none; }
+.dt-app .dt-button:hover:not(:disabled) { background:var(--dt-hover)!important;border-color:var(--dt-control-line)!important;opacity:1; }
+.dt-app .dt-button-primary,.dt-app .dt-send-button { background:var(--dt-accent)!important;color:var(--dt-on-accent)!important;border-color:var(--dt-accent)!important;opacity:1;box-shadow:none; }
+.dt-app .dt-button-primary:hover:not(:disabled),.dt-app .dt-send-button:hover:not(:disabled) { background:var(--dt-accent-hover)!important;border-color:var(--dt-accent-hover)!important;opacity:1; }
+.dt-app .dt-button-primary:active:not(:disabled),.dt-app .dt-send-button:active:not(:disabled) { background:var(--dt-accent-pressed)!important;border-color:var(--dt-accent-pressed)!important; }
+.dt-app .dt-stop-button { background:var(--dt-soft)!important;color:var(--dt-secondary)!important;border-color:var(--dt-control-line)!important; }
+.dt-app .dt-stop-button:hover:not(:disabled) { background:var(--dt-hover)!important;color:var(--dt-text)!important;border-color:var(--dt-control-line)!important; }
+.dt-app .dt-native-attention { background:var(--dt-warning-soft)!important;color:var(--dt-warning);border-color:var(--dt-warning)!important; }
+.dt-app .dt-native-attention:hover:not(:disabled) { background:var(--dt-warning-soft)!important;border-color:var(--dt-warning)!important;color:var(--dt-warning); }
+.dt-app button:disabled { opacity:1;color:var(--dt-disabled-text); }
+.dt-app .dt-button:disabled,.dt-app .dt-button-primary:disabled,.dt-app .dt-native-button:disabled,.dt-app .dt-send-button:disabled { background:var(--dt-disabled)!important;color:var(--dt-disabled-text)!important;border-color:var(--dt-line)!important;opacity:1;box-shadow:none; }
+.dt-app .dt-icon-button:disabled,.dt-app .dt-icon-button:disabled:hover,.dt-app .dt-empty-group:disabled,.dt-app .dt-popover button:disabled { color:var(--dt-disabled-text)!important;opacity:1;background:transparent; }
+.dt-app .dt-color[aria-pressed=true] { border-color:var(--dt-text)!important; }
+.dt-app input:focus,.dt-app textarea:focus,.dt-app select:focus { border-color:var(--dt-focus);box-shadow:none; }
+.dt-app button:focus-visible,.dt-app a:focus-visible,.dt-app .dt-input:focus-visible,.dt-app select:focus-visible { outline:2px solid var(--dt-focus);outline-offset:3px;box-shadow:none; }
+.dt-app .dt-roster-search:focus-within,.dt-app .dt-compose:focus-within,.dt-app .dt-message-search:focus-within { border-color:var(--dt-focus);box-shadow:0 0 0 2px var(--dt-focus-soft); }
+.dt-app .dt-compose textarea:focus,.dt-app .dt-roster-search input:focus,.dt-app .dt-message-search input:focus { outline:none;border-color:transparent;box-shadow:none; }
+.dt-app .dt-message-markdown :is(pre,button,a):focus-visible { outline-color:var(--dt-focus); }
+.dt-app .dt-group-picker input { accent-color:var(--dt-accent); }
+.dt-app .dt-user-avatar,.dt-app .dt-account-avatar { background:var(--dt-avatar-bg);color:var(--dt-avatar-text); }
+.dt-app .dt-presence-badge { background:var(--dt-soft);color:var(--dt-secondary); }
+.dt-app .dt-presence-light { opacity:1; }
+.dt-app :is(.dt-presence-thinking,.dt-presence-researching,.dt-presence-coding,.dt-presence-writing,.dt-presence-working) { color:var(--dt-accent); }
+.dt-app .dt-presence-badge:is(.dt-presence-thinking,.dt-presence-researching,.dt-presence-coding,.dt-presence-writing,.dt-presence-working) { background:var(--dt-selected); }
+.dt-app :is(.dt-presence-queued,.dt-presence-offline,.dt-presence-stopped) { color:var(--dt-muted); }
+.dt-app .dt-presence-badge:is(.dt-presence-queued,.dt-presence-offline,.dt-presence-stopped) { background:var(--dt-soft); }
+.dt-app .dt-presence-waiting { color:var(--dt-warning); }
+.dt-app .dt-presence-badge.dt-presence-waiting { background:var(--dt-warning-soft); }
+.dt-app .dt-presence-completed { color:var(--dt-success); }
+.dt-app .dt-presence-badge.dt-presence-completed { background:var(--dt-success-soft); }
+.dt-app .dt-presence-error { color:var(--dt-danger); }
+.dt-app .dt-presence-badge.dt-presence-error { background:var(--dt-danger-soft); }
+.dt-app .dt-roster-presence:is(.dt-presence-thinking,.dt-presence-researching,.dt-presence-coding,.dt-presence-writing,.dt-presence-working) { color:var(--dt-accent); }
+.dt-app .dt-roster-presence.dt-presence-waiting { color:var(--dt-warning); }
+.dt-app .dt-roster-presence.dt-presence-completed { color:var(--dt-success); }
+.dt-app .dt-roster-presence.dt-presence-error { color:var(--dt-danger); }
+.dt-app .dt-roster-presence:is(.dt-presence-queued,.dt-presence-offline,.dt-presence-stopped) { color:var(--dt-muted); }
+.dt-app :is(.dt-status-running) { color:var(--dt-accent)!important; }
+.dt-app :is(.dt-status-queued,.dt-status-idle,.dt-status-cancelled,.dt-status-interrupted) { color:var(--dt-muted)!important; }
+.dt-app :is(.dt-status-waiting) { color:var(--dt-warning)!important; }
+.dt-app :is(.dt-status-completed,.dt-status-done,.dt-status-success) { color:var(--dt-success)!important; }
+.dt-app :is(.dt-status-failed,.dt-status-error) { color:var(--dt-danger)!important; }
+.dt-app :is(.dt-task-status,.dt-activity-icon).dt-status-running { background:var(--dt-selected); }
+.dt-app :is(.dt-task-status,.dt-activity-icon):is(.dt-status-queued,.dt-status-idle,.dt-status-cancelled,.dt-status-interrupted) { background:var(--dt-soft); }
+.dt-app :is(.dt-task-status,.dt-activity-icon).dt-status-waiting { background:var(--dt-warning-soft); }
+.dt-app :is(.dt-task-status,.dt-activity-icon):is(.dt-status-completed,.dt-status-done,.dt-status-success) { background:var(--dt-success-soft); }
+.dt-app :is(.dt-task-status,.dt-activity-icon):is(.dt-status-failed,.dt-status-error) { background:var(--dt-danger-soft); }
+.dt-app .dt-status-dot { background:currentColor; }
+.dt-app .dt-banner-error,.dt-app .dt-alert { color:var(--dt-danger);background:var(--dt-danger-soft);border-color:var(--dt-danger); }
+.dt-app .dt-modal { color:var(--dt-text);background:var(--dt-card);border-color:var(--dt-line);box-shadow:0 20px 70px color-mix(in srgb,var(--dt-shadow) 18%,transparent); }
+.dt-app .dt-modal-backdrop,.dt-app .dt-roster-open+.dt-drawer-shade { background:color-mix(in srgb,var(--dt-overlay) 42%,transparent); }
+.dt-app .dt-popover,.dt-app .dt-toast { color:var(--dt-text);background:var(--dt-card);border-color:var(--dt-line);box-shadow:0 8px 28px color-mix(in srgb,var(--dt-shadow) 12%,transparent); }
+.dt-app .dt-jump-latest { background:var(--dt-card);color:var(--dt-text);border-color:var(--dt-control-line);box-shadow:0 3px 12px color-mix(in srgb,var(--dt-shadow) 8%,transparent); }
+.dt-app .dt-message-markdown .dt-md-code-block { background:var(--dt-code); }
+.dt-app .dt-md-code-toolbar button:hover:not(:disabled) { background:var(--dt-selected);color:var(--dt-selected-text); }
+.dt-app .dt-danger-button:not(:disabled) { color:var(--dt-danger); }

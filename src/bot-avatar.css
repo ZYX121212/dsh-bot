@@ -1,0 +1,52 @@
+/* One simple sphere; expression and lighting live entirely inside its boundary. */
+.dt-avatar.db-avatar { display:inline-flex;position:relative;align-items:center;justify-content:center;flex:0 0 auto;padding:0;border:0;border-radius:50%;background:transparent;box-shadow:none;overflow:visible;vertical-align:middle;line-height:0;user-select:none; }
+.db-avatar .db-avatar__svg { display:block;width:100%;height:100%;overflow:visible; }
+.db-avatar .db-avatar__composition,.db-avatar .db-avatar__body { transform-origin:60px 61px; }
+.db-avatar .db-avatar__body { animation:db-avatar-breathe var(--db-avatar-breath,5s) ease-in-out infinite;animation-delay:var(--db-avatar-phase,0s); }
+.db-avatar .db-avatar__face { transform-origin:60px 61px;transition:transform .25s ease; }
+.db-avatar .db-avatar__eyes { transform-box:fill-box;transform-origin:center;animation:db-avatar-blink var(--db-avatar-blink,6s) linear infinite;animation-delay:var(--db-avatar-phase,0s); }
+.db-avatar .db-avatar__gaze { animation:db-avatar-look 14s ease-in-out infinite;animation-delay:var(--db-avatar-phase,0s); }
+.db-avatar .db-avatar__mouth { transform-origin:60px 72px; }
+.db-avatar--small .db-avatar__eye-shine { display:none; }
+
+/* No invented working state. The native presence only changes internal expression. */
+.db-avatar[data-bot-state=thinking] .db-avatar__body { animation-name:db-avatar-ponder;animation-duration:5.6s; }
+.db-avatar[data-bot-state=thinking] .db-avatar__gaze { animation:db-avatar-think-gaze 5.6s ease-in-out infinite;animation-delay:var(--db-avatar-phase,0s); }
+.db-avatar[data-bot-state=researching] .db-avatar__gaze { animation:db-avatar-scan 3.6s ease-in-out infinite;animation-delay:var(--db-avatar-phase,0s); }
+.db-avatar:is([data-bot-state=coding],[data-bot-state=writing],[data-bot-state=working]) .db-avatar__gaze { animation:db-avatar-focus 4s ease-in-out infinite;animation-delay:var(--db-avatar-phase,0s); }
+.db-avatar:is([data-bot-state=coding],[data-bot-state=working]) .db-avatar__eye { height:11px; }
+.db-avatar[data-bot-state=writing] .db-avatar__mouth { animation:db-avatar-speak 1.8s ease-in-out infinite;animation-delay:var(--db-avatar-phase,0s); }
+.db-avatar[data-bot-state=waiting] .db-avatar__body { animation:db-avatar-patient 4.6s ease-in-out infinite;animation-delay:var(--db-avatar-phase,0s); }
+.db-avatar[data-bot-state=waiting] .db-avatar__eyes { animation-duration:3.4s; }
+.db-avatar[data-bot-state=queued] .db-avatar__body { animation-duration:7s; }
+.db-avatar[data-bot-state=queued] .db-avatar__eye { height:11px; }
+.db-avatar[data-bot-state=completed] .db-avatar__body { animation:db-avatar-pleased 1.6s ease-in-out 2; }
+.db-avatar[data-bot-state=error] .db-avatar__body { animation:db-avatar-unsure 6s ease-in-out infinite;animation-delay:var(--db-avatar-phase,0s); }
+.db-avatar[data-bot-state=error] .db-avatar__gaze { animation:none;transform:translate(0,2px); }
+.db-avatar[data-bot-state=error] .db-avatar__eye { height:10px; }
+.db-avatar[data-bot-state=offline] .db-avatar__svg { opacity:.48; }
+.db-avatar[data-bot-state=stopped] .db-avatar__svg { opacity:.7; }
+.db-avatar:is([data-bot-state=offline],[data-bot-state=stopped]) * { animation:none!important; }
+@media(hover:hover) and (pointer:fine) {
+  .db-avatar--interactive:not([data-bot-state=offline]):not([data-bot-state=stopped]):hover .db-avatar__face { transform:translate(1.7px,-.7px); }
+}
+@keyframes db-avatar-breathe { 0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(-1.4px) scale(1.008)} }
+@keyframes db-avatar-blink { 0%,39%,42%,83%,86%,100%{transform:scaleY(1)}40%,41%,84%,85%{transform:scaleY(.13)} }
+@keyframes db-avatar-look { 0%,23%,44%,69%,100%{transform:translate(0,0)}27%,39%{transform:translate(1.5px,-.4px)}73%,84%{transform:translate(-1.5px,.4px)} }
+@keyframes db-avatar-ponder { 0%,100%{transform:rotate(-1.5deg)}50%{transform:rotate(1.5deg) translateY(-1.2px)} }
+@keyframes db-avatar-think-gaze { 0%,100%{transform:translate(1.8px,-2.5px)}45%,65%{transform:translate(-1.5px,-2px)} }
+@keyframes db-avatar-scan { 0%,100%{transform:translate(-2px,0)}50%{transform:translate(2.5px,0)} }
+@keyframes db-avatar-focus { 0%,100%{transform:translate(-.7px,2px)}50%{transform:translate(1px,2px)} }
+@keyframes db-avatar-speak { 0%,100%{transform:scaleY(.65)}45%{transform:scaleY(1.1)}70%{transform:scaleY(.8)} }
+@keyframes db-avatar-patient { 0%,100%{transform:rotate(-1.4deg)}50%{transform:rotate(1.4deg) translateY(-1px)} }
+@keyframes db-avatar-pleased { 0%,100%{transform:translateY(0)}40%{transform:translateY(-2.5px)} }
+@keyframes db-avatar-unsure { 0%,100%{transform:rotate(-2deg)}50%{transform:rotate(2deg)} }
+[data-bot-motion=paused] .db-avatar *, .db-avatar[data-bot-motion=paused] * { animation-play-state:paused!important;transition:none!important; }
+[data-bot-motion=paused] .db-avatar--interactive:hover .db-avatar__face,.db-avatar--interactive[data-bot-motion=paused]:hover .db-avatar__face { transform:none; }
+@media(prefers-reduced-motion:reduce) {
+  .db-avatar * { animation:none!important;transition:none!important; }
+  .db-avatar[data-bot-state=thinking] .db-avatar__gaze { transform:translate(1.8px,-2.5px); }
+  .db-avatar:is([data-bot-state=coding],[data-bot-state=writing],[data-bot-state=working]) .db-avatar__gaze { transform:translate(0,2px); }
+  .db-avatar[data-bot-state=error] .db-avatar__body { transform:rotate(-2deg); }
+  .db-avatar--interactive:hover .db-avatar__face { transform:none!important; }
+}

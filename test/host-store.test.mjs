@@ -161,6 +161,8 @@ test('tasks and runs are explicit durable audit records; upsert client identity 
   assert.equal(state.runs.length, 1); assert.equal(state.runs[0].taskId, taskId); assert.equal(state.runs[0].title, 'First attempt');
   assert.equal(state.runs[0].summary, 'Brief created.');
   assert.deepEqual(await new WorkspaceStore(file).read(), state);
+  await rejectsCode(store.update({ action: 'deleteTask', id: taskId }), 'work-active');
+  await store.update({ action: 'updateTask', id: taskId, patch: { status: 'completed' } });
   await store.update({ action: 'deleteTask', id: taskId });
   state = await store.read(); assert.equal(state.tasks.length, 0); assert.equal(state.runs.length, 1); assert.equal(state.runs[0].taskId, null);
   await store.update({ action: 'upsertRun', run: { id: runId, status: 'completed', summary: 'Still readable.' } });
@@ -362,4 +364,61 @@ test('host RPC reports validated business errors but redacts raw IO paths', asyn
   await assert.rejects(owner.botWorkspace.update({}), error => error.code === 'bot-workspace/revision-conflict' && error.message === 'Refresh before editing.');
   failure = new Error('EACCES /private/credentials.json');
   await assert.rejects(owner.botWorkspace.read(), error => error.code === 'bot-workspace/storage-error' && !error.message.includes('/private'));
+});
+
+
+test('owned turn and pending native-result outbox round-trip without changing schema version', async t => {
+  const { store, file } = await fixture(t), id = randomUUID();
+  await store.update({ action: 'upsertRun', run: { id, status: 'running', afterSeq: 10, dispatchId: id, turn: 2, settled: false } });
+  await store.update({ action: 'upsertRun', run: { id, status: 'completed', summary: 'real completion', reply: 'public reply', settled: false } });
+  const state = await new WorkspaceStore(file).read(); assert.equal(state.version, 1); assert.equal(state.runs[0].dispatchId, id); assert.equal(state.runs[0].turn, 2); assert.equal(state.runs[0].reply, 'public reply'); assert.equal(state.runs[0].settled, false);
+  const stale = await store.update({ action: 'upsertRun', run: { id, status: 'waiting', summary: 'stale observer' } }); assert.equal(stale.runs[0].status, 'completed'); assert.equal(stale.runs[0].summary, 'real completion');
+  await store.update({ action: 'upsertRun', run: { id, status: 'completed', settled: true } }); assert.equal((await store.read()).runs[0].settled, true);
+});
+test('legacy run ownership is unknown while legacy terminal records do not invent pending deliveries', async t => {
+  const { store, file } = await fixture(t); await store.update({ action: 'upsertRun', run: { status: 'running' } }); let snapshot = await store.update({ action: 'upsertRun', run: { status: 'completed' } });
+  for (const run of snapshot.runs) for (const key of ['dispatchId', 'turn', 'settled', 'reply']) delete run[key]; await writeFile(file, JSON.stringify(snapshot));
+  snapshot = await new WorkspaceStore(file).read(); assert.equal(snapshot.runs[0].dispatchId, null); assert.equal(snapshot.runs[0].turn, null); assert.equal(snapshot.runs[0].settled, false); assert.equal(snapshot.runs[1].settled, true);
+});
+test('archival and member removal do not lose an already-admitted matching terminal run delivery', async t => {
+  const { store } = await fixture(t); let state = await makeBot(store); const botId = state.bots[0].id;
+  state = await store.update({ action: 'createGroup', name: 'Crew', memberIds: [botId] }); const groupId = state.groups[0].id, runId = randomUUID();
+  await store.update({ action: 'upsertRun', run: { id: runId, botId, groupId, sessionId: 'native-owned', dispatchId: runId, turn: 2, afterSeq: 10, status: 'completed', summary: 'real output', reply: 'real output', settled: false } });
+  await store.update({ action: 'updateGroup', id: groupId, patch: { archived: true, memberIds: [] } });
+  const request = { action: 'appendGroupMessage', groupId, message: { id: runId, role: 'assistant', botId, runId, sessionId: 'native-owned', text: 'real output' } };
+  state = await store.update(request); assert.equal(state.groups[0].messages.length, 1); const revision = state.revision; assert.equal((await store.update(request)).revision, revision);
+  await rejectsCode(store.update({ action: 'appendGroupMessage', groupId, message: { role: 'user', text: 'new work' } }), 'invalid-input');
+  await rejectsCode(store.update({ action: 'appendGroupMessage', groupId, message: { role: 'assistant', botId, runId, sessionId: 'native-owned', text: 'unproven different output' } }), 'invalid-input');
+});
+for (const run of [{ status: 'queued', turn: -1 }, { status: 'queued', turn: 1.5 }, { status: 'queued', settled: 'false' }, { status: 'queued', dispatchId: 'not-a-uuid' }, { status: 'queued', reply: {} }]) test(`new run ownership/outbox rejects malformed ${Object.keys(run).at(-1)}`, async t => { const { store } = await fixture(t); await rejectsCode(store.update({ action: 'upsertRun', run }), 'invalid-input'); });
+
+
+test('explicit group clear frees full history without deleting active task or durable reply proof', async t => {
+  const { store, file } = await fixture(t); let state = await makeBot(store); const botId = state.bots[0].id;
+  state = await store.update({ action: 'createGroup', name: 'Full history', memberIds: [botId] }); const groupId = state.groups[0].id;
+  state = await store.update({ action: 'createTask', groupId, title: 'admitted work' }); const taskId = state.tasks[0].id, id = randomUUID();
+  state = await store.update({ action: 'upsertRun', run: { id, taskId, botId, groupId, sessionId: 'native-safe', status: 'completed', dispatchId: id, turn: 2, summary: 'REAL PROOF', reply: 'REAL PROOF', settled: false } });
+  state.groups[0].messages = Array.from({ length: 400 }, (_, i) => ({ id: randomUUID(), role: 'user', botId: null, sessionId: null, runId: null, text: `old ${i}`, createdAt: 1 })); await writeFile(file, JSON.stringify(state));
+  const proof = structuredClone(state.runs[0]), task = structuredClone(state.tasks[0]); state = await store.update({ action: 'clearGroupMessages', id: groupId });
+  assert.equal(state.groups[0].messages.length, 0); assert.deepEqual(state.runs[0], proof); assert.deepEqual(state.tasks[0], task);
+  state = await store.update({ action: 'appendGroupMessage', groupId, message: { id, runId: id, botId, role: 'assistant', sessionId: 'native-safe', text: 'REAL PROOF' } }); assert.equal(state.groups[0].messages.length, 1); assert.equal(state.groups[0].messages[0].text, 'REAL PROOF');
+});
+test('explicit ended-record cleanup preserves every active or unsettled dependency in both directions', async t => {
+  const { store } = await fixture(t); const keepTasks = [], keepRuns = [], removeTasks = [], removeRuns = [];
+  const add = async (taskStatus, runStatus, settled) => { let taskId = null; if (taskStatus) { let state = await store.update({ action: 'createTask', title: taskStatus }); taskId = state.tasks.at(-1).id; if (taskStatus !== 'queued') await store.update({ action: 'updateTask', id: taskId, patch: { status: taskStatus } }); } let id = null; if (runStatus) { id = randomUUID(); await store.update({ action: 'upsertRun', run: { id, taskId, status: runStatus, ...(settled === undefined ? {} : { settled }) } }); } return [taskId, id]; };
+  for (const args of [['running', 'completed', true], ['completed', 'running', true], ['failed', 'failed', false]]) { const [task, run] = await add(...args); keepTasks.push(task); keepRuns.push(run); }
+  for (const args of [['completed', 'completed', true], ['cancelled', null], [null, 'completed']]) { const [task, run] = await add(...args); if (task) removeTasks.push(task); if (run) removeRuns.push(run); }
+  for (const args of [[null, 'waiting', true], [null, 'completed', false]]) { const [, run] = await add(...args); keepRuns.push(run); }
+  const state = await store.update({ action: 'cleanupEndedRecords' }); assert.deepEqual(state.tasks.map(task => task.id).sort(), keepTasks.sort()); assert.deepEqual(state.runs.map(run => run.id).sort(), keepRuns.sort());
+  assert.ok(removeTasks.every(id => !state.tasks.some(task => task.id === id))); assert.ok(removeRuns.every(id => !state.runs.some(run => run.id === id)));
+});
+for (const action of ['deleteBot', 'deleteGroup', 'deleteTask']) test(`${action} cannot delete a pending terminal-proof dependency`, async t => {
+  const { store } = await fixture(t); let state = await makeBot(store); const botId = state.bots[0].id;
+  state = await store.update({ action: 'createGroup', name: 'Protected', memberIds: [botId] }); const groupId = state.groups[0].id;
+  state = await store.update({ action: 'createTask', groupId, title: 'proof pending' }); const taskId = state.tasks[0].id;
+  await store.update({ action: 'updateTask', id: taskId, patch: { status: 'completed' } }); const runId = randomUUID();
+  await store.update({ action: 'upsertRun', run: { id: runId, taskId, botId, groupId, status: 'completed', settled: false, reply: 'not delivered' } });
+  const request = { action, id: action === 'deleteBot' ? botId : action === 'deleteGroup' ? groupId : taskId }; const before = await store.read();
+  await rejectsCode(store.update(request), 'work-active'); assert.deepEqual(await store.read(), before);
+  await store.update({ action: 'upsertRun', run: { id: runId, status: 'completed', settled: true } }); await store.update(request);
 });

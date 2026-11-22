@@ -1,6 +1,6 @@
 {
   "name": "dsh-bot",
-  "version": "0.2.0",
+  "version": "0.5.0",
   "icon": "./icon.svg",
   "description": "Persistent AI teammates, collaborative group chats and observable work inside DeepSeek Harness",
   "type": "module",
@@ -19,9 +19,17 @@
     "test",
     "scripts/build.mjs",
     "scripts/team-browser-smoke.mjs",
+    "scripts/team-color-audit.mjs",
+    "scripts/team-functional-audit.mjs",
+    "scripts/team-history-audit.mjs",
+    "scripts/team-record-audit.mjs",
     "cordis.patch.yml",
     "README.md",
-    "icon.svg"
+    "CONTRIBUTING.md",
+    "docs/screenshots",
+    "screenshots.json",
+    "icon.svg",
+    "icon.png"
   ],
   "scripts": {
     "build": "node scripts/build.mjs",
@@ -50,6 +58,8 @@
     }
   },
   "license": "MIT",
+  "author": "ZYX121212",
+  "keywords": ["deepseek-harness", "dsh-plugin", "ai-teammates", "group-chat", "persistent-agents"],
   "repository": {
     "type": "git",
     "url": "git+https://github.com/ZYX121212/dsh-bot.git"

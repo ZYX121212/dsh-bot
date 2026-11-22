@@ -4,11 +4,26 @@
  * or cloud/sandbox assumptions. Keep one instance for the plugin lifetime.
  */
 
+import { TEAM_CONTEXT_LIMIT } from './team-core.mjs';
+
 const asText = value => typeof value === 'string' ? value : '';
 const finite = value => Number.isFinite(value) ? value : undefined;
 const textBlocks = blocks => Array.isArray(blocks) ? blocks.filter(block => block?.type === 'text').map(block => asText(block.text)).join('') : '';
 const errorText = error => typeof error === 'string' ? error : asText(error?.message);
 const assistantId = (data, seq) => Number.isFinite(data.turn) && Number.isFinite(data.step) ? `assistant:${data.turn}:${data.step}` : `assistant:${seq}`;
+
+const DISPATCH_ID = /^[a-f\d]{8}-[a-f\d]{4}-[1-8][a-f\d]{3}-[89ab][a-f\d]{3}-[a-f\d]{12}$/i;
+/** Correlate only our exact bounded public prompt envelope, never body substrings. */
+export function dispatchIdFromPrompt(value) {
+  if (typeof value !== 'string' || !value.startsWith('[[DSH_BOT_CONTEXT_V2]]\n')) return null;
+  const start = '[[DSH_BOT_CONTEXT_V2]]\n'.length, end = value.indexOf('\n[[/DSH_BOT_CONTEXT_V2]]\n\n', start);
+  if (end < start || end - start > TEAM_CONTEXT_LIMIT) return null;
+  try {
+    const context = JSON.parse(value.slice(start, end));
+    return context && !Array.isArray(context) && context.product === 'dsh-bot' && Object.hasOwn(context, 'dispatchId') && typeof context.dispatchId === 'string' && DISPATCH_ID.test(context.dispatchId) ? context.dispatchId : null;
+  } catch { return null; }
+}
+const nativeTurn = value => Number.isSafeInteger(value) && value >= 0 ? value : undefined;
 
 /** Return only an unambiguous current native main-view CWD, not a guessed recent directory. */
 export function currentWorkspaceCwd(ctx) {
@@ -26,8 +41,8 @@ export function currentWorkspaceCwd(ctx) {
  * prevents a racing durable frame from being shown beside its partial frame.
  */
 export function extractRuntimeSnapshot(entries = [], sessionState = {}, pendingStatus) {
-  const messages = new Map(), activities = new Map(), files = new Map(), live = new Map(), settled = new Map();
-  let latestTurn, currentTurn, lastSeq = 0, lastTurnEnd = null;
+  const messages = new Map(), activities = new Map(), files = new Map(), live = new Map(), settled = new Map(), turnEnds = [];
+  let latestTurn, currentTurn, lastSeq = 0, firstSeq = null, lastTurnEnd = null;
   const events = (Array.isArray(entries) ? entries : []).map(row => row?.event ?? row).filter(event => event && typeof event.type === 'string');
   // First remove historical surface nodes shadowed by native replacement events.
   const shadowed = new Set();
@@ -42,6 +57,7 @@ export function extractRuntimeSnapshot(entries = [], sessionState = {}, pendingS
   for (let index = 0; index < events.length; index++) {
     const event = events[index], data = event.data ?? {}, seq = finite(event.seq) ?? index + 1, time = finite(event.time);
     lastSeq = Math.max(lastSeq, seq);
+    if (Number.isFinite(event.seq)) firstSeq = firstSeq === null ? event.seq : Math.min(firstSeq, event.seq);
     if (event.type === 'turn/start') { currentTurn = finite(data.turn); latestTurn = currentTurn ?? latestTurn; }
     if (Number.isFinite(data.turn)) latestTurn = Math.max(latestTurn ?? 0, data.turn);
     if (shadowed.has(seq)) continue;
@@ -50,7 +66,7 @@ export function extractRuntimeSnapshot(entries = [], sessionState = {}, pendingS
       // contexts are not ordinary user chat and can contain sensitive internals.
       if (data.source?.kind && data.source.kind !== 'user') continue;
       const text = textBlocks(data.content);
-      if (text) messages.set(asText(data.id) || `user:${seq}`, { id: asText(data.id) || `user:${seq}`, role: 'user', text, turn: currentTurn, seq, time, partial: false });
+      if (text) messages.set(asText(data.id) || `user:${seq}`, { id: asText(data.id) || `user:${seq}`, role: 'user', text, turn: nativeTurn(data.turn) ?? currentTurn, dispatchId: dispatchIdFromPrompt(text), seq, time, partial: false });
     } else if (event.type === 'assistant/message') {
       const id = assistantId(data, seq), text = textBlocks(data.message?.content);
       settled.set(id, { seq, kind: 'message' });
@@ -79,6 +95,7 @@ export function extractRuntimeSnapshot(entries = [], sessionState = {}, pendingS
     } else if (event.type === 'turn/end') {
       const reason = typeof data.reason === 'string' ? data.reason : asText(data.reason?.kind);
       lastTurnEnd = { turn: finite(data.turn), reason, seq, time };
+      turnEnds.push(lastTurnEnd);
       for (const [id, activity] of activities) if (activity.status === 'running' && (activity.turn === data.turn || activity.turn === undefined)) activities.set(id, { ...activity, status: 'interrupted' });
     }
   }
@@ -98,7 +115,7 @@ export function extractRuntimeSnapshot(entries = [], sessionState = {}, pendingS
     sessionId: asText(sessionState.sessionId),
     messages: [...messages.values()].sort((a, b) => a.seq - b.seq),
     activities: [...activities.values()].sort((a, b) => a.seq - b.seq), files: [...files.values()],
-    lastSeq, latestTurn, lastTurnEnd,
+    lastSeq, firstSeq, latestTurn, lastTurnEnd, turnEnds,
     running: sessionState.running === true || sessionState.awaitingFirstTurn === true || pendingStatus?.running === true,
     error, approval, needsAttention: !!pending || lastTurnEnd?.reason === 'blocked',
     approvalStatusAvailable: pendingStatus !== undefined,
@@ -145,17 +162,20 @@ export function createBotRuntime(ctx) {
     snapshot.sessionId = entry.sessionId;
     snapshot.approvalStatusAvailable = !!statusSource;
     entry.snapshot = snapshot;
-    // Consume each new terminal boundary at most once. A queued second send is
-    // not considered completed merely because the first queued turn finished.
-    for (const row of window.entries ?? []) {
-      const event = row?.event ?? row;
-      if (event?.type !== 'turn/end' || !Number.isFinite(event.seq) || event.seq <= entry.handledEndSeq) continue;
-      entry.handledEndSeq = event.seq;
-      const task = entry.tasks.find(task => !task.finished && task.baseline < event.seq);
-      if (task) task.finished = true;
+    // Queue admission does not identify a turn. Match our public user frame
+    // first; unrelated queued work must not release this task's retention.
+    const claimed = entry.claimedUserSeqs;
+    for (const task of entry.tasks) {
+      if (task.finished) continue;
+      if (task.turn === undefined) {
+        const user = snapshot.messages.find(message => message.role === 'user' && message.seq > task.baseline && nativeTurn(message.turn) !== undefined && !claimed.has(message.seq) && (task.dispatchId ? message.dispatchId === task.dispatchId : message.text === task.prompt));
+        if (user) { task.turn = user.turn; task.userSeq = user.seq; claimed.add(user.seq); }
+      }
+      if (task.turn !== undefined && snapshot.turnEnds.some(end => end.turn === task.turn && end.seq > task.baseline)) task.finished = true;
     }
     if (state.removed) for (const task of entry.tasks) task.finished = true;
     entry.tasks = entry.tasks.filter(task => !task.finished || task.admitting);
+    if (!entry.tasks.length) entry.claimedUserSeqs.clear();
     for (const callback of [...entry.listeners]) { try { callback(snapshot); } catch { /* One UI cannot break other subscribers or Host tracking. */ } }
     maybeRelease(entry);
   }
@@ -164,7 +184,7 @@ export function createBotRuntime(ctx) {
     let entry = entries.get(sessionId);
     if (entry) return entry;
     const reference = ctx.sessions.retain(sessionId, { source: 'dshBotRuntime' });
-    entry = { sessionId, reference, ready: false, closed: false, binding: null, leases: 0, operations: 0, listeners: new Set(), off: [], snapshot: null, tasks: [], handledEndSeq: 0 };
+    entry = { sessionId, reference, ready: false, closed: false, binding: null, leases: 0, operations: 0, listeners: new Set(), off: [], snapshot: null, tasks: [], claimedUserSeqs: new Set(), handledEndSeq: 0 };
     entries.set(sessionId, entry);
     entry.readiness = Promise.resolve(reference.ready).then(binding => {
       if (disposed || entry.closed) throw new Error('dsh-bot runtime is disposed.');
@@ -215,6 +235,39 @@ export function createBotRuntime(ctx) {
     }
     return creations.get(id);
   }
+  async function cancelDispatch(entry, dispatchId, options = {}) {
+    if (typeof dispatchId !== 'string' || !DISPATCH_ID.test(dispatchId)) throw new Error('A valid dispatch identity is required.');
+    const unverified = () => { const error = new Error('尚未核实本条消息的原生队列或当前回合，未停止其他工作。请打开原生会话检查后重试。'); error.code = 'dispatch-unverified'; return error; };
+    const owned = () => {
+      publish(entry);
+      const task = entry.tasks.find(task => task.dispatchId === dispatchId), user = entry.snapshot.messages.find(message => message.role === 'user' && message.dispatchId === dispatchId && nativeTurn(message.turn) !== undefined);
+      const turn = nativeTurn(options.turn) ?? task?.turn ?? user?.turn;
+      if (turn === undefined) return null;
+      if (entry.snapshot.turnEnds.some(end => end.turn === turn)) return { scope: 'finished', turn };
+      return entry.snapshot.running && entry.snapshot.latestTurn === turn ? { scope: 'turn', turn } : null;
+    };
+    const stopOwned = async state => {
+      if (state.scope === 'turn') { const result = await entry.binding.session.cancel(); if (!result?.ok) throw new Error(errorText(result?.error) || 'DSH could not cancel this turn.'); }
+      return { sessionId: entry.sessionId, accepted: true, ...state };
+    };
+    let state = owned(); if (state) return stopOwned(state);
+    await ctx.sessions.refreshProjections?.(entry.sessionId);
+    state = owned(); if (state) return stopOwned(state);
+    const inbox = ctx.sessions.list?.getSnapshot?.()?.projectionsBySession?.[entry.sessionId]?.values?.inbox;
+    const matches = ['next-turn', 'next-step'].flatMap(key => Array.isArray(inbox?.[key]) ? inbox[key] : []).filter(message => message && typeof message.id === 'string' && message.id && message.source?.kind === 'user' && dispatchIdFromPrompt(textBlocks(message.content)) === dispatchId);
+    if (matches.length !== 1 || typeof entry.binding.session.updateQueue !== 'function') throw unverified();
+    // Public Host contract locates this exact pending occurrence or fails; its
+    // synchronous remove path cannot return success for an already-started item.
+    const result = await entry.binding.session.updateQueue(matches[0].id, { kind: 'remove' });
+    if (!result?.ok) {
+      await ctx.sessions.refreshProjections?.(entry.sessionId);
+      state = owned(); if (state) return stopOwned(state);
+      const error = unverified(); if (result?.error?.message) error.message = result.error.message; throw error;
+    }
+    for (const task of entry.tasks) if (task.dispatchId === dispatchId) task.finished = true;
+    publish(entry);
+    return { sessionId: entry.sessionId, accepted: true, scope: 'queue', dispatchId, itemId: matches[0].id };
+  }
   function makeHandle(entry) {
     let released = false;
     const requireHandle = () => { ensureAlive(); if (released || entry.closed) throw new Error('Session handle has been released.'); };
@@ -227,10 +280,10 @@ export function createBotRuntime(ctx) {
         const mode = options.mode ?? 'queue';
         if (!['queue', 'steer'].includes(mode)) throw new Error('Unsupported send mode.');
         entry.operations++;
-        const task = { baseline: entry.snapshot?.lastSeq ?? 0, finished: false, admitting: true };
+        const task = { baseline: entry.snapshot?.lastSeq ?? 0, dispatchId: dispatchIdFromPrompt(prompt), prompt, turn: undefined, userSeq: undefined, finished: false, admitting: true };
         entry.tasks.push(task);
         try {
-          const receipt = await entry.binding.session.prompt([{ type: 'text', text: prompt }], mode);
+          const receipt = await entry.binding.session.prompt([{ type: 'text', text: prompt }], mode, undefined, task.dispatchId ?? undefined);
           if (!receipt?.ok) throw new Error(errorText(receipt?.error) || 'DSH rejected the message.');
           return { sessionId: entry.sessionId, accepted: true };
         } catch (error) { task.finished = true; throw error; }
@@ -242,6 +295,7 @@ export function createBotRuntime(ctx) {
         if (!receipt?.ok) throw new Error(errorText(receipt?.error) || 'DSH could not cancel this turn.');
         return { sessionId: entry.sessionId, accepted: true };
       },
+      async cancelDispatch(dispatchId, options = {}) { requireHandle(); return cancelDispatch(entry, dispatchId, options); },
       open() { requireHandle(); return open(entry.sessionId); },
       async loadOlder() { requireHandle(); await entry.binding.session.loadOlder(); },
       release() { if (released) return; released = true; entry.leases--; maybeRelease(entry); }

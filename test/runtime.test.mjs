@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createBotRuntime, currentWorkspaceCwd, extractRuntimeSnapshot } from '../src/runtime.mjs';
+import { createBotRuntime, currentWorkspaceCwd, extractRuntimeSnapshot, dispatchIdFromPrompt } from '../src/runtime.mjs';
 
 const event = (seq, type, data, extra = {}) => ({ event: { seq, time: seq * 100, type, data, ...extra } });
 function observable(initial) {
@@ -18,7 +18,7 @@ function fixture(options = {}) {
     const entry = { state, events, releases: 0, prompts: [], cancels: 0, older: 0, seq: 0 };
     entry.session = {
       getSnapshot: state.getSnapshot, subscribe: state.subscribe,
-      async prompt(content, mode) { entry.prompts.push({ content, mode }); return options.prompt ? options.prompt(entry, content, mode) : { ok: true }; },
+      async prompt(content, mode) { entry.prompts.push({ content, mode }); if (options.prompt) return options.prompt(entry, content, mode); const turn = Math.max(0, ...events.getSnapshot().entries.map(row => row.event?.data?.turn ?? 0)) + 1; entry.push(event(++entry.seq, 'turn/start', { turn }), event(++entry.seq, 'user/message', { source: { kind: 'user' }, content })); return { ok: true }; },
       async cancel() { entry.cancels++; return options.cancel ? options.cancel(entry) : { ok: true }; },
       async loadOlder() { entry.older++; }
     };
@@ -357,4 +357,64 @@ test('target validation, empty sends, unsupported mode, released handles and nat
   delete f.ctx.uiWorkspace;
   assert.throws(() => runtime.open('s'), /unavailable/);
   runtime.dispose();
+});
+
+
+const dispatch = '12345678-1234-4123-8123-123456789abc';
+const ownedPrompt = (id = dispatch) => `[[DSH_BOT_CONTEXT_V2]]\n${JSON.stringify({ product: 'dsh-bot', dispatchId: id })}\n[[/DSH_BOT_CONTEXT_V2]]\n\nUser body`;
+test('dispatch identity accepts only canonical bounded root envelope JSON, never body matches', () => {
+  assert.equal(dispatchIdFromPrompt(ownedPrompt()), dispatch);
+  for (const invalid of ['body ' + ownedPrompt(), ownedPrompt('00000000-0000-0000-0000-000000000000'), `text ${dispatch}`, '[[DSH_BOT_CONTEXT_V2]]\n{bad}\n[[/DSH_BOT_CONTEXT_V2]]\n\nbody', `[[DSH_BOT_CONTEXT_V2]]\n${JSON.stringify({ dispatchId: dispatch })}\n[[/DSH_BOT_CONTEXT_V2]]\n\nbody`, `[[DSH_BOT_CONTEXT_V2]]\n${' '.repeat(262145)}{}\n[[/DSH_BOT_CONTEXT_V2]]\n\nbody`]) assert.equal(dispatchIdFromPrompt(invalid), null);
+});
+test('snapshot exposes public dispatch turn and all visible terminal boundaries for batch-safe ownership', () => {
+  const snapshot = extractRuntimeSnapshot([event(1, 'turn/start', { turn: 2 }), event(2, 'user/message', { source: { kind: 'user' }, content: [{ type: 'text', text: ownedPrompt() }] }), event(3, 'turn/end', { turn: 2, reason: 'completed' }), event(4, 'turn/start', { turn: 3 }), event(5, 'turn/end', { turn: 3, reason: 'completed' })]);
+  assert.equal(snapshot.messages[0].dispatchId, dispatch); assert.equal(snapshot.messages[0].turn, 2); assert.deepEqual(snapshot.turnEnds.map(end => end.turn), [2, 3]); assert.equal(snapshot.lastTurnEnd.turn, 3);
+});
+test('unrelated native terminal cannot release an accepted dispatch before its own user turn appears', async () => {
+  const f = fixture({ prompt: () => ({ ok: true }) }), runtime = createBotRuntime(f.ctx);
+  try { await runtime.send({ id: 'owner' }, ownedPrompt()); const native = f.native('native-1'); native.finish(77); assert.equal(native.releases, 0); native.push(event(++native.seq, 'turn/start', { turn: 78 }), event(++native.seq, 'user/message', { source: { kind: 'user' }, content: [{ type: 'text', text: ownedPrompt() }] })); native.finish(78); assert.equal(native.releases, 1); }
+  finally { runtime.dispose(); }
+});
+test('identical queued prompts cannot reuse a previously consumed public user frame', async () => {
+  const f = fixture({ prompt: () => ({ ok: true }) }), runtime = createBotRuntime(f.ctx);
+  try { await runtime.send({ id: 'owner' }, 'same body'); await runtime.send({ id: 'owner' }, 'same body'); const native = f.native('native-1');
+    native.push(event(++native.seq, 'turn/start', { turn: 1 }), event(++native.seq, 'user/message', { content: [{ type: 'text', text: 'same body' }] })); native.finish(1); native.state.set({ ...native.state.getSnapshot(), running: false }); assert.equal(native.releases, 0);
+    native.push(event(++native.seq, 'turn/start', { turn: 2 }), event(++native.seq, 'user/message', { content: [{ type: 'text', text: 'same body' }] })); native.finish(2); assert.equal(native.releases, 1);
+  } finally { runtime.dispose(); }
+});
+
+test('firstSeq reports raw tool-only window progress even when no public chat messages exist', () => {
+  assert.equal(extractRuntimeSnapshot([]).firstSeq, null);
+  const latest = extractRuntimeSnapshot([event(50, 'tool/call', { name: 'bash', callId: 'c' }), event(51, 'tool/result', { message: { toolCallId: 'c', content: [] } })]);
+  const expanded = extractRuntimeSnapshot([event(7, 'tool/call', { name: 'read', callId: 'older' }), event(50, 'tool/call', { name: 'bash', callId: 'c' }), event(51, 'tool/result', { message: { toolCallId: 'c', content: [] } })]);
+  assert.equal(latest.messages.length, 0); assert.equal(expanded.messages.length, 0); assert.equal(latest.firstSeq, 50); assert.equal(expanded.firstSeq, 7); assert.equal(expanded.lastSeq, 51);
+});
+
+const setInbox = (f, sessionId, rows) => f.ctx.sessions.list.set({ byId: {}, projectionsBySession: { [sessionId]: { state: 'ready', values: { inbox: { 'next-turn': rows, 'next-step': [] } } } } });
+const queueRow = (id, text = ownedPrompt()) => ({ id, source: { kind: 'user' }, content: [{ type: 'text', text }] });
+test('scoped stop removes only exact owned pending occurrence and never cancels foreign active work', async () => {
+  const f = fixture({ prompt: () => ({ ok: true }) }), runtime = createBotRuntime(f.ctx), removed = []; f.ctx.sessions.refreshProjections = async () => {};
+  const handle = await runtime.acquire({ id: 'a', sessionId: 's' });
+  try { await handle.send(ownedPrompt()); const native = f.native('s'); native.push(event(++native.seq, 'turn/start', { turn: 9 })); native.state.set({ ...native.state.getSnapshot(), running: true });
+    setInbox(f, 's', [queueRow('not-ours', 'different request'), queueRow('real-occurrence')]); native.session.updateQueue = async (id, action) => { removed.push({ id, action }); setInbox(f, 's', [queueRow('not-ours', 'different request')]); return { ok: true, value: { accepted: true } }; };
+    const result = await handle.cancelDispatch(dispatch); assert.equal(result.scope, 'queue'); assert.deepEqual(removed, [{ id: 'real-occurrence', action: { kind: 'remove' } }]); assert.equal(native.cancels, 0); assert.equal(native.state.getSnapshot().running, true);
+  } finally { handle.release(); runtime.dispose(); }
+});
+test('queue-to-start race revalidates owned public turn before requesting cancellation', async () => {
+  const f = fixture({ prompt: () => ({ ok: true }) }), runtime = createBotRuntime(f.ctx); f.ctx.sessions.refreshProjections = async () => {};
+  const handle = await runtime.acquire({ id: 'a', sessionId: 's' });
+  try { await handle.send(ownedPrompt()); const native = f.native('s'); setInbox(f, 's', [queueRow('racing')]); native.session.updateQueue = async () => { setInbox(f, 's', []); native.push(event(++native.seq, 'turn/start', { turn: 2 }), event(++native.seq, 'user/message', { source: { kind: 'user' }, content: [{ type: 'text', text: ownedPrompt() }] })); native.state.set({ ...native.state.getSnapshot(), running: true }); return { ok: false, error: { code: 'session/queue-item-not-found', message: 'already started' } }; };
+    const result = await handle.cancelDispatch(dispatch); assert.equal(result.scope, 'turn'); assert.equal(native.cancels, 1); assert.equal(runtime.snapshot('s').lastTurnEnd, null, 'A cancel request is not fabricated as a terminal result');
+  } finally { handle.release(); runtime.dispose(); }
+});
+test('lost queue race without owned active evidence never falls back to cancelling another turn', async () => {
+  const f = fixture({ prompt: () => ({ ok: true }) }), runtime = createBotRuntime(f.ctx); f.ctx.sessions.refreshProjections = async () => {};
+  const handle = await runtime.acquire({ id: 'a', sessionId: 's' });
+  try { await handle.send(ownedPrompt()); const native = f.native('s'); setInbox(f, 's', [queueRow('stale')]); native.session.updateQueue = async () => { setInbox(f, 's', []); native.push(event(++native.seq, 'turn/start', { turn: 99 })); native.state.set({ ...native.state.getSnapshot(), running: true }); return { ok: false, error: { code: 'session/queue-item-not-found', message: 'not pending' } }; }; await assert.rejects(handle.cancelDispatch(dispatch), error => error.code === 'dispatch-unverified'); assert.equal(native.cancels, 0);
+  } finally { handle.release(); runtime.dispose(); }
+});
+test('ambiguous or unavailable queue identity remains unconfirmed rather than issuing global stop', async () => {
+  const f = fixture({ prompt: () => ({ ok: true }) }), runtime = createBotRuntime(f.ctx), handle = await runtime.acquire({ id: 'a', sessionId: 's' });
+  try { await handle.send(ownedPrompt()); await assert.rejects(handle.cancelDispatch(dispatch), error => error.code === 'dispatch-unverified'); setInbox(f, 's', [queueRow('one'), queueRow('two')]); f.native('s').session.updateQueue = () => { throw new Error('must not choose ambiguous item'); }; await assert.rejects(handle.cancelDispatch(dispatch), error => error.code === 'dispatch-unverified'); assert.equal(f.native('s').cancels, 0); }
+  finally { handle.release(); runtime.dispose(); }
 });

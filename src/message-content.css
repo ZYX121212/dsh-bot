@@ -1,0 +1,115 @@
+/* Scoped to assistant message content; parent imports this stylesheet as text. */
+.dt-app .dt-message-markdown {
+  min-width: 0;
+  max-width: 100%;
+  color: var(--dt-text);
+  font-size: inherit;
+  line-height: 1.8;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+.dt-app .dt-message-markdown > * { margin: 0 0 .85em; }
+.dt-app .dt-message-markdown > :last-child { margin-bottom: 0; }
+.dt-app .dt-message-markdown p,
+.dt-app .dt-message-markdown li { white-space: pre-wrap; }
+.dt-app .dt-message-markdown :is(h1,h2,h3,h4,h5,h6) {
+  margin: 1.1em 0 .45em;
+  font-family: inherit;
+  font-weight: 600;
+  line-height: 1.5;
+  letter-spacing: -.15px;
+  white-space: pre-wrap;
+}
+.dt-app .dt-message-markdown :is(h1,h2) { font-size: 1.17em; }
+.dt-app .dt-message-markdown :is(h3,h4,h5,h6) { font-size: 1.04em; }
+.dt-app .dt-message-markdown > :first-child { margin-top: 0; }
+.dt-app .dt-message-markdown :is(ul,ol) { padding-inline-start: 1.7em; }
+.dt-app .dt-message-markdown li { padding-inline-start: .15em; margin: .18em 0; }
+.dt-app .dt-message-markdown li::marker { color: var(--dt-secondary); }
+.dt-app .dt-message-markdown blockquote {
+  margin-inline: 0;
+  padding: .2em 0 .2em 1em;
+  border-inline-start: 2px solid var(--dt-line);
+  color: var(--dt-secondary);
+}
+.dt-app .dt-message-markdown blockquote p { margin: 0; }
+.dt-app .dt-message-markdown strong { font-weight: 600; }
+.dt-app .dt-message-markdown a { color: var(--dt-accent); text-decoration: underline; text-underline-offset: 3px; }
+.dt-app .dt-message-markdown code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: .9em;
+  font-variant-ligatures: none;
+}
+.dt-app .dt-message-markdown .dt-md-inline-code {
+  padding: .12em .32em;
+  border: 1px solid var(--dt-line);
+  border-radius: 4px;
+  background: var(--dt-soft);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.dt-app .dt-message-markdown .dt-md-code-block {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  border: 1px solid var(--dt-line);
+  border-radius: 9px;
+  background: var(--dt-soft);
+}
+.dt-app .dt-message-markdown .dt-md-code-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 35px;
+  padding: 4px 10px 4px 13px;
+  border-bottom: 1px solid var(--dt-line);
+  color: var(--dt-secondary);
+  font-size: 10px;
+  line-height: 1.5;
+}
+.dt-app .dt-message-markdown .dt-md-code-toolbar > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dt-app .dt-message-markdown .dt-md-code-toolbar button {
+  flex-shrink: 0;
+  min-height: 28px;
+  padding: 4px 7px;
+  border-radius: 5px;
+  color: var(--dt-secondary);
+  font-size: 11px;
+}
+.dt-app .dt-message-markdown .dt-md-code-toolbar button:hover:not(:disabled) { color: var(--dt-text); background: var(--dt-hover); }
+.dt-app .dt-message-markdown pre {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  margin: 0;
+  padding: 12px 13px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  color: var(--dt-text);
+  background: transparent;
+  line-height: 1.65;
+  white-space: pre;
+  overflow-wrap: normal;
+  word-break: normal;
+  tab-size: 4;
+}
+.dt-app .dt-message-markdown pre code {
+  display: block;
+  width: max-content;
+  min-width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  white-space: pre;
+  overflow-wrap: normal;
+  word-break: normal;
+}
+.dt-app .dt-message-markdown :is(pre,button,a):focus-visible { outline: 2px solid var(--dt-accent); outline-offset: -2px; }
+@media (max-width: 600px) {
+  .dt-app .dt-message-markdown .dt-md-code-toolbar { min-height: 42px; padding-inline: 10px 5px; }
+  .dt-app .dt-message-markdown .dt-md-code-toolbar button { min-height: 36px; padding-inline: 9px; }
+  .dt-app .dt-message-markdown pre { padding: 10px; }
+}
