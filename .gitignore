@@ -1,0 +1,14 @@
+node_modules/
+artifacts/
+coverage/
+playwright-report/
+test-results/
+*.tgz
+*.tar.gz
+*.log
+.DS_Store
+.env
+.env.*
+!.env.example
+*.pem
+*.key
