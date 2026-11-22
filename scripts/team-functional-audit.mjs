@@ -40,7 +40,7 @@ export async function auditWorkspaceFunctions(page, { check, store, miloSession,
         restore() { fixture.ctx.connection.rpc.call = original; delete fixture.functionalAuditGate; } };
       fixture.functionalAuditGate = gate;
       fixture.ctx.connection.rpc.call = async (...args) => {
-        if (args[1] === 'botWorkspace/update' && args[2]?.request?.action === action) {
+        if (args[1] === 'botWorkspace/update' && args[2]?.args?.request?.action === action) {
           gate.count++;
           if (gate.count === 1) { gate.seen = true; await waiting; if (gate.fail) return { ok: false, error: { message: failureMessage } }; }
         }
@@ -81,7 +81,7 @@ export async function auditWorkspaceFunctions(page, { check, store, miloSession,
       const fixture = window.__fixture, original = fixture.ctx.connection.rpc.call;
       fixture.functionalArchiveProbe = { actions: [], restore() { fixture.ctx.connection.rpc.call = original; delete fixture.functionalArchiveProbe; } };
       fixture.ctx.connection.rpc.call = (...args) => {
-        if (args[1] === 'botWorkspace/update') fixture.functionalArchiveProbe.actions.push(args[2]?.request?.action);
+        if (args[1] === 'botWorkspace/update') fixture.functionalArchiveProbe.actions.push(args[2]?.args?.request?.action);
         return original(...args);
       };
     });

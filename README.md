@@ -2,7 +2,7 @@
 
 **Persistent AI teammates for DeepSeek Harness.**
 
-[下载安装包](https://github.com/ZYX121212/dsh-bot/releases/tag/v0.5.0) · [反馈问题](https://github.com/ZYX121212/dsh-bot/issues) · [参与贡献](CONTRIBUTING.md) · [MIT License](LICENSE)
+[下载安装包](https://github.com/ZYX121212/dsh-bot/releases/tag/v0.5.1) · [反馈问题](https://github.com/ZYX121212/dsh-bot/issues) · [参与贡献](CONTRIBUTING.md) · [MIT License](LICENSE)
 
 ![dsh-bot 简洁工作台](docs/screenshots/workspace.png)
 
@@ -10,9 +10,11 @@
 
 参考 [Grok Bot](https://x.ai/bot) 的**长期 AI 同事 / 团队协作**产品形式，为 DeepSeek Harness 构建的原生双端插件。不是 X 上的自动回复账号，也不是套了四种提示词的单轮问答页。独立 dsh-bot 品牌，非 Grok/xAI 官方产品。
 
-## 0.5 · 功能闭环（公开预览）
+## 0.5.1 · RPC 协议修复（公开预览）
 
-本分支为 **0.5.0 公开预览**，安装包与更新说明见 [v0.5.0 Release](https://github.com/ZYX121212/dsh-bot/releases/tag/v0.5.0)。已通过 346 项单元 / 契约测试、147 项实际构建组件回归；尚未完成已认证桌面与真实模型端到端验收，不将此预览版标为生产稳定版。
+本分支为 **0.5.1 公开预览**，安装包与更新说明见 [v0.5.1 Release](https://github.com/ZYX121212/dsh-bot/releases/tag/v0.5.1)。修复 0.5.0 工作区读写请求缺少 `{ args: ... }` 封套、实际宿主报 `Remote payload must contain exactly one plain-object args field` 的问题；旧版不建议继续安装。没有迁移或清空用户数据。
+
+347 项单元 / 契约测试包含实际 SDK Gateway、Connection Fetch 载体、Owner / Guest 权限及磁盘写入回归；147 项构建组件回归的元数据路径也经真实 Gateway 和构建后的 Host 服务，不再用直接读写存储的替身冒充协议校验。原生会话、模型、工具和审批仍为明确的测试替身，尚未完成已认证桌面与真实模型端到端验收，不将此预览版标为生产稳定版。
 
 - **完整检索与导出**：对话搜索与 Markdown 导出会继续读取原生更早事件页，包括没有公开聊天文本的工具页；以原生当前公开消息为准，不复活失败尝试或被替换的消息。读取失败可重试，不把部分历史冒充完整文件；关闭导出或切换会话不会产生迟到下载。
 - **保存闭环**：Bot、群组、记忆保存期间锁定表单与关闭操作；防止重复提交和提交后编辑被丢弃。失败保留原值，可修改后重试。
@@ -72,7 +74,7 @@ Bot 可以使用宿主实际允许的子代理工具，但这些临时子代理�
 
 针对 **DSH 0.2.2-rc.1 / Node >=24.9.0**。其他版本需要实际验证，不建议使用版本豁免强装。
 
-**普通用户**：到 [GitHub Releases](https://github.com/ZYX121212/dsh-bot/releases/tag/v0.5.0) 下载 tgz 安装包，或在应用内插件管理器使用下方发行包地址安装。目前未发布 npm；市场是否可搜索，以实际目录收录和同步结果为准。
+**普通用户**：到 [GitHub Releases](https://github.com/ZYX121212/dsh-bot/releases/tag/v0.5.1) 下载 tgz 安装包，或在应用内插件管理器使用下方发行包地址安装。目前未发布 npm；市场是否可搜索，以实际目录收录和同步结果为准。
 
 **开发者从源码构建**：
 
@@ -91,7 +93,7 @@ npm pack --pack-destination artifacts
 推荐安装已构建的 tgz bundle，以让包管理器正确处理 SDK peers：
 
 ```text
-dsh plugin --profile web add https://github.com/ZYX121212/dsh-bot/releases/download/v0.5.0/dsh-bot-0.5.0.tgz
+dsh plugin --profile web add https://github.com/ZYX121212/dsh-bot/releases/download/v0.5.1/dsh-bot-0.5.1.tgz
 ```
 
 桌面版优先通过应用内插件管理器安装以上 URL；命令示例中的 `web` 仅适用于该 profile，其他安装方式请替换成实际 profile。也可下载后使用 DSH 插件管理器的 `install_bundle` 安装本地绝对路径。不要启动另一套 Web 服务来代替当前 GUI。

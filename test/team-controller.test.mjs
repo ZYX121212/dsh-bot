@@ -76,8 +76,12 @@ function fixture(options = {}) {
   }
   const ctx = {
     sessions: { list: { getSnapshot: () => ({ byId: { selected: { cwd: '/project', retainedBy: { mainView: 1 } } } }) } },
-    connection: { rpc: { async call(channel, endpoint, payload) {
-      assert.equal(channel, '/api'); calls.push({ endpoint, payload: clone(payload) });
+    connection: { rpc: { async call(channel, endpoint, envelope) {
+      assert.equal(channel, '/api');
+      assert.deepEqual(Reflect.ownKeys(envelope), ['args']);
+      const payload = envelope.args;
+      assert.equal(Object.getPrototypeOf(payload), Object.prototype);
+      calls.push({ endpoint, payload: clone(payload) });
       if (options.rpc) { const override = await options.rpc(endpoint, payload); if (override) return override; }
       if (endpoint === 'botWorkspace/read') return { ok: true, value: clone(workspace) };
       if (endpoint === 'botWorkspace/update') return { ok: true, value: update(payload.request) };
@@ -580,7 +584,7 @@ test('native session already running is not submitted another overlapping job', 
 const drain = async () => { for (let i = 0; i < 18; i++) await nextTurn(); };
 test('late mutation receipt returns its own task identity despite a newer concurrent refresh', async () => {
   const f = fixture(), committed = deferred(), gate = deferred(); const original = f.ctx.connection.rpc.call; let first = true;
-  f.ctx.connection.rpc.call = async (...args) => { const result = await original(...args); if (first && args[2]?.request?.action === 'createTask') { first = false; committed.resolve(); await gate.promise; } return result; };
+  f.ctx.connection.rpc.call = async (...args) => { const result = await original(...args); if (first && args[2]?.args?.request?.action === 'createTask') { first = false; committed.resolve(); await gate.promise; } return result; };
   try {
     await ready(f); const sending = f.controller.send('our request'); await committed.promise;
     const ours = f.workspace.tasks.at(-1).id, foreign = randomUUID(); f.workspace.tasks.push({ id: foreign, title: 'foreign request', botId: f.botB, status: 'queued' }); f.workspace.revision++;

@@ -10,12 +10,14 @@ import { auditWorkspaceColors } from './team-color-audit.mjs';
 import { auditWorkspaceFunctions } from './team-functional-audit.mjs';
 import { auditConversationHistory } from './team-history-audit.mjs';
 import { auditRecordManagement } from './team-record-audit.mjs';
+import { createWorkspaceGatewayFixture } from './team-gateway-fixture.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const artifacts = resolve(root, 'artifacts');
 await mkdir(artifacts, { recursive: true });
 const temp = await mkdtemp(resolve(tmpdir(), 'dsh-bot-browser-'));
 const store = new WorkspaceStore(resolve(temp, 'workspace.json'));
+let gateway;
 const browser = await chromium.launch({ ...(process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH } : process.platform === 'darwin' && existsSync('/Applications/Google Chrome.app/Contents/MacOS/Google Chrome') ? { channel: 'chrome' } : {}), headless: true });
 const errors = [], checks = [];
 const check = (name, value = true) => { assert.ok(value, name); checks.push(name); console.log(`PASS ${name}`); };
@@ -23,10 +25,7 @@ const context = await browser.newContext({ viewport: { width: 1500, height: 960 
 const page = await context.newPage();
 page.on('pageerror', error => errors.push(error.message));
 page.on('dialog', dialog => dialog.accept());
-await page.exposeFunction('botRpc', async (method, payload) => {
-  try { return { ok: true, value: method.endsWith('/read') ? await store.read() : await store.update(payload.request) }; }
-  catch (error) { return { ok: false, error: { code: error.code, message: error.message } }; }
-});
+await page.exposeFunction('botRpc', (channel, method, payload) => gateway.call(channel, method, payload));
 await page.route('https://dsh-bot.test/**', route => route.fulfill({ contentType: 'text/html', body: '<!doctype html><html lang="zh"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="margin:0;height:100dvh"><div id="root" style="height:100%;width:100%"></div></body></html>' }));
 const fixture = () => {
   const cleanups = [], slots = [], sessions = new Map(), stats = { creates: [], prompts: [], opens: [], cancels: [] };
@@ -34,7 +33,7 @@ const fixture = () => {
   function source(initial) { let value = initial; const listeners = new Set(); return { getSnapshot: () => value, subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn); }, publish(next = value) { value = next; for (const fn of listeners) fn(); } }; }
   const status = source(new Map());
   const ctx = {
-    connection: { rpc: { call: (_namespace, method, payload) => window.botRpc(method, payload) } },
+    connection: { rpc: { call: (channel, method, payload) => window.botRpc(channel, method, payload) } },
     uiSession: { sessionStatus: status },
     uiWorkspace: { openSession(id) { stats.opens.push(id); } },
     layout: {}, effect(fn) { cleanups.push(fn()); },
@@ -130,6 +129,7 @@ async function createBot(name, templateLabel) {
   await page.getByRole('dialog').waitFor({ state: 'hidden' });
 }
 try {
+  gateway = await createWorkspaceGatewayFixture(store);
   await load();
   await page.getByRole('heading', { name: 'dsh-bot', exact: true }).waitFor();
   check('Production bundle starts from a genuinely empty host store, without demo Bots');
@@ -301,7 +301,7 @@ try {
   await composer.fill('IME 组词确认');
   await composer.dispatchEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 229, bubbles: true });
   check('IME candidate confirmation never sends a prompt', await page.evaluate(() => window.__fixture.stats.prompts.length) === promptBaseline);
-  await page.evaluate(() => { const f = window.__fixture, original = f.ctx.connection.rpc.call; let once = true; f.ctx.connection.rpc.call = async (...args) => { if (once && args[1] === 'botWorkspace/update' && args[2]?.request?.action === 'createTask') { once = false; await new Promise(resolve => { f.releaseAdmission = () => { f.ctx.connection.rpc.call = original; resolve(); }; }); } return original(...args); }; });
+  await page.evaluate(() => { const f = window.__fixture, original = f.ctx.connection.rpc.call; let once = true; f.ctx.connection.rpc.call = async (...args) => { if (once && args[1] === 'botWorkspace/update' && args[2]?.args?.request?.action === 'createTask') { once = false; await new Promise(resolve => { f.releaseAdmission = () => { f.ctx.connection.rpc.call = original; resolve(); }; }); } return original(...args); }; });
   await composer.fill('提交中的第一条消息');
   await page.getByRole('button', { name: '发送消息', exact: true }).click();
   await page.waitForFunction(() => typeof window.__fixture.releaseAdmission === 'function');
@@ -347,10 +347,13 @@ try {
   await page.keyboard.press('Escape');
   check('Dialog supports keyboard Escape and returns control to the workspace', await page.getByRole('dialog').count() === 0);
   check('No React or browser runtime errors', errors.length === 0);
-  await writeFile(resolve(artifacts, 'team-browser-smoke.json'), JSON.stringify({ kind: 'fixture-only-browser-integration', note: 'Built production artifact + actual disk WorkspaceStore; native sessions, provider text, approvals and tool events are explicit test doubles. Not authenticated live GUI or real-provider E2E.', checks, pageErrors: errors, passed: checks.length, viewport: [1500, 960], mobile: [390, 844] }, null, 2));
+  await writeFile(resolve(artifacts, 'team-browser-smoke.json'), JSON.stringify({ kind: 'fixture-only-browser-integration', note: 'Built production artifact + real public SDK Connection Fetch carrier, Gateway, owner-checked built Host service and actual disk WorkspaceStore; native sessions, provider text, approvals and tool events remain explicit test doubles. Not authenticated live GUI or real-provider E2E.', checks, pageErrors: errors, passed: checks.length, viewport: [1500, 960], mobile: [390, 844] }, null, 2));
   console.log(`Completed ${checks.length} fixture browser checks.`);
 } catch (error) {
   await page.screenshot({ path: resolve(artifacts, 'team-browser-failure.png'), fullPage: true }).catch(() => {});
   console.error({ checks, errors });
   throw error;
-} finally { await context.close(); await browser.close(); }
+} finally {
+  try { await context.close(); }
+  finally { try { await browser.close(); } finally { await gateway?.dispose(); } }
+}

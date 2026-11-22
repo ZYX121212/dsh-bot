@@ -48,7 +48,7 @@ export function createTeamController(ctx, options = {}) {
     return workspace;
   }
   async function rpc(method, payload) {
-    const result = await ctx.connection.rpc.call('/api', `botWorkspace/${method}`, payload);
+    const result = await ctx.connection.rpc.call('/api', `botWorkspace/${method}`, { args: payload });
     if (!result?.ok) { const error = new Error(result?.error?.message ?? '无法连接 Bot 工作区。请确认插件已安装并重启 DSH。'); error.code = result?.error?.code; throw error; }
     return result.value;
   }

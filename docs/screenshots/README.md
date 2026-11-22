@@ -2,7 +2,7 @@
 
 These screenshots show the actual built dsh-bot components in an automated test carrier. They are not screenshots of an authenticated live DSH desktop session. Native sessions, model text, tools and approval events in that carrier are explicit test doubles.
 
-以下为 0.5.0 实际构建组件的测试环境预览；不是已认证桌面 GUI 或真实模型端到端演示。产品首次安装不会带入截图中的团队、聊天或工作记录。
+以下为 0.5.1 实际构建组件的测试环境预览，元数据读写经过真实 SDK Gateway、Connection Fetch 载体和构建后的 Host 服务；不是已认证桌面 GUI 或真实模型端到端演示。产品首次安装不会带入截图中的团队、聊天或工作记录。
 
 - [浅色配色](palette-light.png)
 - [深色配色](palette-dark.png)

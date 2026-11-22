@@ -5,7 +5,7 @@ import { WorkspaceStore, WorkspaceError } from './host-store.mjs';
 const remoteInitializers = [];
 /**
  * Authenticated owner-only metadata endpoint; no model calls or elevated peers.
- * Wire: botWorkspace/read {} and botWorkspace/update {request:{action,...}}.
+ * Wire: botWorkspace/read {args:{}} and botWorkspace/update {args:{request:{action,...}}}.
  * Both return the full snapshot through the native RemoteResult carrier.
  */
 export class BotWorkspaceService extends TypertRemoteService {

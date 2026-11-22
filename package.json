@@ -1,6 +1,6 @@
 {
   "name": "dsh-bot",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "icon": "./icon.svg",
   "description": "Persistent AI teammates, collaborative group chats and observable work inside DeepSeek Harness",
   "type": "module",
@@ -23,6 +23,7 @@
     "scripts/team-functional-audit.mjs",
     "scripts/team-history-audit.mjs",
     "scripts/team-record-audit.mjs",
+    "scripts/team-gateway-fixture.mjs",
     "cordis.patch.yml",
     "README.md",
     "CONTRIBUTING.md",
@@ -59,7 +60,13 @@
   },
   "license": "MIT",
   "author": "ZYX121212",
-  "keywords": ["deepseek-harness", "dsh-plugin", "ai-teammates", "group-chat", "persistent-agents"],
+  "keywords": [
+    "deepseek-harness",
+    "dsh-plugin",
+    "ai-teammates",
+    "group-chat",
+    "persistent-agents"
+  ],
   "repository": {
     "type": "git",
     "url": "git+https://github.com/ZYX121212/dsh-bot.git"
@@ -70,10 +77,17 @@
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "~4.1.0",
-    "@deepseek-ai/dsh-typert-protocol": "0.2.2-rc.1",
-    "@deepseek-ai/dsh-home-paths": "0.2.2-rc.1"
+    "@deepseek-ai/dsh-home-paths": "0.2.2-rc.1",
+    "@deepseek-ai/dsh-typert-protocol": "0.2.2-rc.1"
+  },
+  "overrides": {
+    "zod": "4.6.6"
   },
   "devDependencies": {
+    "@deepseek-ai/dsh-api-gateway": "0.2.2-rc.1",
+    "@deepseek-ai/dsh-api-remote-access": "0.2.2-rc.1",
+    "@deepseek-ai/dsh-client-connection": "0.2.2-rc.1",
+    "@deepseek-ai/dsh-typert-registry": "0.2.2-rc.1",
     "esbuild": "^0.25.12",
     "playwright": "^1.56.1",
     "react": "^18.3.1",

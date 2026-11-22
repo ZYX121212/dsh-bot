@@ -15,7 +15,7 @@ npm run test:browser
 
 macOS 浏览器测试默认使用已安装的 Google Chrome；其他系统使用 Playwright Chromium。可通过 `CHROME_PATH` 显式指定浏览器。安装 SDK 后，host 接口测试使用真实的 npm SDK peers；`DSH_SDK_ROOT` 可指向现有 DSH 安装的 `node_modules/@deepseek-ai` 目录。
 
-浏览器验收中的会话、模型文本、工具与授权事件是明确的测试替身，不应把通过结果描述为真实模型端到端测试。更改会话、权限或工具行为时，请额外在已认证 DSH 界面做低风险联调，并说明环境。
+浏览器元数据读写必须经过真实 SDK Gateway、Connection Fetch 载体、构建后的 Host 服务和隔离的临时磁盘存储，不得退回直接写存储的 RPC 替身。独立协议回归必须覆盖旧错误请求被拒绝、新请求读写成功及非 Owner 被拒绝，不得因缺 SDK 而跳过。浏览器验收中的原生会话、模型文本、工具与授权事件仍是明确的测试替身，不应把通过结果描述为真实模型端到端测试。更改会话、权限或工具行为时，请额外在已认证 DSH 界面做低风险联调，并说明环境。
 
 ## 提交要求
 
